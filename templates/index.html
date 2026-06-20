@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voxlink-парсер</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #111113;
+      --surface: #1c1c1f;
+      --border:  #2a2a2e;
+      --text:    #e8e8ea;
+      --muted:   #6b6b72;
+      --accent:  #7c6af7;
+      --success: #3ecf6e;
+      --error:   #f26464;
+      --warn:    #f5a623;
+      --radius:  10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 56px 16px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Шапка ── */
+    .header h1 { font-size: 1.2rem; font-weight: 600; }
+    .header p  { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Карточка ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .card-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+    }
+
+    /* ── Поля формы ── */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 0.8rem; color: var(--muted); }
+
+    input[type="text"],
+    input[type="file"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.9rem;
+      color: var(--text);
+      outline: none;
+      width: 100%;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus   { border-color: var(--accent); }
+    input[type="file"]::file-selector-button {
+      background: var(--border);
+      color: var(--text);
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    /* ── Кнопки ── */
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+      text-align: center;
+      text-decoration: none;
+    }
+    .btn:hover  { opacity: .82; }
+    .btn:active { opacity: .65; }
+    .btn-primary { background: var(--accent);  color: #fff; }
+    .btn-success { background: var(--success); color: #111; }
+    .btn-warn    { background: var(--warn);    color: #111; }
+    .btn-ghost   { background: var(--border);  color: var(--muted); }
+    .btn-full    { width: 100%; }
+
+    /* ── Прогресс-бар ── */
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .progress-track {
+      height: 5px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--accent);
+      transition: width .5s ease, background .3s;
+    }
+    .progress-fill.done { background: var(--success); }
+    .progress-fill.fail { background: var(--error);   }
+
+    /* ── Статус ── */
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    .status-row:last-child { border-bottom: none; }
+    .status-row .label { color: var(--muted); font-size: 0.78rem; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-running      { background: rgba(124,106,247,.15); color: var(--accent);  }
+    .badge-done         { background: rgba(62,207,110,.12);  color: var(--success); }
+    .badge-error        { background: rgba(242,100,100,.12); color: var(--error);   }
+    .badge-interrupted  { background: rgba(245,166,35,.12);  color: var(--warn);    }
+    .badge-idle         { background: var(--border);         color: var(--muted);   }
+
+    /* ── Спиннер ── */
+    .spinner {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 1.5px solid var(--accent);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Алерты ── */
+    .alert {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .alert-error { background: rgba(242,100,100,.1); color: var(--error); border: 1px solid rgba(242,100,100,.2); }
+    .alert-warn  { background: rgba(245,166,35,.1);  color: var(--warn);  border: 1px solid rgba(245,166,35,.2);  }
+
+    .row-actions { display: flex; gap: 10px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Шапка -->
+  <div class="header">
+    <h1>Voxlink — обогащение номеров</h1>
+    <p>Массовый запрос оператора и региона по CSV</p>
+  </div>
+
+  <!-- Форма загрузки (показываем только когда не running) -->
+  {{if ne .Status "running"}}
+  <div class="card">
+    <div class="card-title">Новое задание</div>
+    <form method="POST" action="/start" enctype="multipart/form-data">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="field">
+          <label>CSV-файл с номерами</label>
+          <input type="file" name="inputFile" accept=".csv" required/>
+        </div>
+        <div class="field">
+          <label>Путь для сохранения результата (необязательно)</label>
+          <input type="text" name="outputPath" placeholder="/Users/me/output.csv"/>
+        </div>
+        <button class="btn btn-primary btn-full" type="submit">Запустить →</button>
+      </div>
+    </form>
+  </div>
+  {{end}}
+
+  <!-- Восстановление после сбоя -->
+  {{if or (eq .Status "interrupted") (eq .Status "error")}}
+  <div class="alert alert-warn">
+    {{if eq .Status "interrupted"}}⚠ Задание было прервано. Последний обработанный номер: <strong>{{.LastNumber}}</strong>{{end}}
+    {{if eq .Status "error"}}✕ Ошибка: {{.ErrorMsg}}{{end}}
+  </div>
+  <div class="card">
+    <div class="card-title">Восстановление</div>
+    <div class="row-actions">
+      <form method="POST" action="/resume" style="flex:1">
+        <button class="btn btn-warn btn-full" type="submit">
+          Продолжить с «{{.LastNumber}}»
+        </button>
+      </form>
+    </div>
+  </div>
+  {{end}}
+
+  <!-- Прогресс (показываем если есть активное задание) -->
+  {{if ne .Status "idle"}}
+  <div class="card" id="progressCard">
+    <div class="card-title">
+      Прогресс
+      {{if eq .Status "running"}}<span class="spinner"></span>{{end}}
+    </div>
+
+    <div>
+      <div class="progress-meta">
+        <span id="progressLabel">{{.Processed}} / {{.Total}}</span>
+        <span id="progressPct">—</span>
+      </div>
+      <div class="progress-track" style="margin-top:8px;">
+        <div
+          class="progress-fill {{if eq .Status "done"}}done{{else if eq .Status "error"}}fail{{end}}"
+          id="progressFill"
+          style="width: {{if gt .Total 0}}{{pct .Processed .Total}}{{else}}0{{end}}%"
+        ></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="status-row">
+        <span class="label">Статус</span>
+        <span class="badge badge-{{.Status}}" id="statusBadge">{{.Status}}</span>
+      </div>
+      <div class="status-row">
+        <span class="label">Файл</span>
+        <span style="font-size:.82rem;color:var(--muted)">{{.InputFile}}</span>
+      </div>
+      <div class="status-row">
+        <span class="label">Обработано</span>
+        <span id="processedVal">{{.Processed}}</span>
+      </div>
+      <div class="status-row">
+        <span class="label">Ошибок</span>
+        <span id="errorsVal" style="color:var(--error)">{{.Errors}}</span>
+      </div>
+      <div class="status-row">
+        <span class="label">Последний номер</span>
+        <span id="lastNum" style="font-size:.82rem;color:var(--muted)">{{.LastNumber}}</span>
+      </div>
+    </div>
+
+    <div class="row-actions">
+      {{if eq .Status "done"}}
+      <a href="/download" class="btn btn-success btn-full">Скачать результат ↓</a>
+      {{end}}
+      {{if eq .Status "running"}}
+      <form method="POST" action="/cancel" style="flex:1">
+        <button class="btn btn-ghost btn-full" type="submit">Отменить</button>
+      </form>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+
+</div>
+
+<script>
+  // Polling каждые 800мс пока задание running
+  (function() {
+    const fill   = document.getElementById('progressFill');
+    const label  = document.getElementById('progressLabel');
+    const pct    = document.getElementById('progressPct');
+    const badge  = document.getElementById('statusBadge');
+    const proc   = document.getElementById('processedVal');
+    const errs   = document.getElementById('errorsVal');
+    const lastN  = document.getElementById('lastNum');
+
+    if (!fill) return;
+
+    function poll() {
+      fetch('/status')
+        .then(r => r.json())
+        .then(d => {
+          const p = d.percent || 0;
+
+          fill.style.width  = p + '%';
+          pct.textContent   = p + '%';
+          label.textContent = d.processed + ' / ' + d.total;
+          proc.textContent  = d.processed;
+          errs.textContent  = d.errors;
+          lastN.textContent = d.lastNumber || '—';
+
+          // Обновляем badge
+          badge.textContent = d.status;
+          badge.className   = 'badge badge-' + d.status;
+
+          // Меняем цвет полоски
+          fill.classList.toggle('done', d.status === 'done');
+          fill.classList.toggle('fail', d.status === 'error');
+
+          // Перезагружаем страницу когда задание завершилось —
+          // чтобы появилась кнопка скачать / форма восстановления
+          if (d.status === 'done' || d.status === 'error' || d.status === 'interrupted') {
+            setTimeout(() => location.reload(), 800);
+            return;
+          }
+
+          setTimeout(poll, 800);
+        })
+        .catch(() => setTimeout(poll, 2000));
+    }
+
+    // Стартуем polling только если задание выполняется
+    if (badge && badge.textContent.trim() === 'running') {
+      setTimeout(poll, 800);
+    }
+  })();
+</script>
+</body>
+</html>
